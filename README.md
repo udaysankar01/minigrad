@@ -12,6 +12,5 @@ minigrad/
 ├── autograd.py               # Backpropagation logic
 ├── nn.py                     # Simple neural network layers and activations
 ├── optim.py                  # Optimizers (SGD, Adam, etc.)
-├── loss.py                   # Loss functions (MSE, Cross-entropy, etc.)
-└── utils.py                  # Helper functions (e.g., data loaders)
+└── loss.py                   # Loss functions (MSE, Cross-entropy, etc.)
 ```
