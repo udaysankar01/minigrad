@@ -25,15 +25,21 @@ class Tensor:
     def __init__(
             self,
             data: Union[float, list, np.ndarray],
-            requires_grad: bool = False
+            requires_grad: bool = False,
+            _children: Set['Tensor'] = None,
+            _op: str = '',
     ):
         """
         Initialize the Tensor object.
 
         Parameters:
             data (array-like): The initial values of the tensor. Can be a list, NumPy array, etc.
-            requires_grad (bool): If True, enables gradient tracking for this tensor.
+            requires_grad (bool, optional): If True, enables gradient tracking for this tensor.
                                   Defaults to False.
+            _children (Set[Tensor], optional): Parent tensors that were used to compute this tensor.
+                                               Defaults to empty set.
+            _op (str, optional): Operation that created this tensor, used for debugging.
+                                 Defaults to empty string.
         """
         if not isinstance(data, np.ndarray):
             data = np.array(data, dtype=np.float32)
@@ -43,8 +49,8 @@ class Tensor:
 
         # Internal variables used for autograd graph construction
         self._backward: Callable[[], None] = lambda: None
-        self._prev: Set['Tensor'] = {}
-        self._op: str = ""
+        self._prev: Set['Tensor'] = _children if _children is not None else set()
+        self._op: str = _op
 
     def __repr__(self):
         return f"Tensor (Data={self.data}, requires_grad={self.requires_grad})"
@@ -53,7 +59,16 @@ class Tensor:
         other = other if isinstance(other, Tensor) else Tensor(other)
         data = self.data + other.data
         requires_grad = self.requires_grad or other.requires_grad
-        out = Tensor(data, )
+        out = Tensor(data, requires_grad, _children={self,other}, _op='add')
+
+        def _backward():
+            if self.requires_grad:
+                self.grad = self.grad + out.grad if self.grad is not None else out.grad
+            if other.requires_grad:
+                other.grad = other.grad + out.grad if other.grad is not None else out.grad
+
+        out._backward = _backward
+        return out
 
     def backward(self, grad: Optional['Tensor'] = None):
         """
