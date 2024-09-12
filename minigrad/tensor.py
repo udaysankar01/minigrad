@@ -54,7 +54,18 @@ class Tensor:
 
     def __repr__(self):
         return f"Tensor (Data={self.data}, requires_grad={self.requires_grad})"
-    
+
+    def __neg__(self):
+        data = -self.data
+        out = Tensor(data, self.requires_grad, _children={self}, _op="neg")
+
+        def _backward():
+            if self.requires_grad:
+                self.grad = self.grad - out.grad if self.grad is not None else -out.grad
+        
+        out._backward = _backward
+        return out
+
     def __add__(self, other):
         other = other if isinstance(other, Tensor) else Tensor(other)
         data = self.data + other.data
@@ -69,6 +80,9 @@ class Tensor:
 
         out._backward = _backward
         return out
+
+    def __sub__(self, other):
+        return self + (-other)
 
     def backward(self, grad: Optional['Tensor'] = None):
         """
