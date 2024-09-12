@@ -2,11 +2,39 @@ import numpy as np
 from typing import Optional, Union, Callable, Set
 
 class Tensor:
+    """
+    A class representing a multi-dimensional array (tensor) with support for
+    automatic differentiation.
+
+    The Tensor class holds data and gradients, and supports basic tensor
+    operations like addition and multiplication. When `requires_grad` is set to
+    True, the Tensor will accumulate gradients during backpropagation.
+
+    Attributes:
+        data (np.ndarray): The actual data stored in the tensor, converted to a NumPy array.
+        requires_grad (bool): Indicates whether this tensor should calculate and accumulate
+                              gradients during the backward pass.
+        grad (np.ndarray or None): Stores the gradient of the tensor. Initially None.
+        _backward (callable or None): Function to backpropagate gradients through the tensor.
+        _prev (set): The set of parent tensors used to create this tensor.
+        _op (str): Operation that created this tensor, used for debugging.
+                    
+    Example:
+        >>> a = Tensor([1.0, 2.0, 3.0], requires_grad=True)
+    """
     def __init__(
             self,
             data: Union[float, list, np.ndarray],
             requires_grad: bool = False
     ):
+        """
+        Initialize the Tensor object.
+
+        Parameters:
+            data (array-like): The initial values of the tensor. Can be a list, NumPy array, etc.
+            requires_grad (bool): If True, enables gradient tracking for this tensor.
+                                  Defaults to False.
+        """
         if not isinstance(data, np.ndarray):
             data = np.array(data, dtype=np.float32)
         self.data = data
@@ -20,8 +48,24 @@ class Tensor:
 
     def __repr__(self):
         return f"Tensor (Data={self.data}, requires_grad={self.requires_grad})"
+    
+    def __add__(self, other):
+        other = other if isinstance(other, Tensor) else Tensor(other)
+        data = self.data + other.data
+        requires_grad = self.requires_grad or other.requires_grad
+        out = Tensor(data, )
 
     def backward(self, grad: Optional['Tensor'] = None):
+        """
+        Computes the gradients by performing backprogation.
+        Assumes the current tensor is a scalar (i.e., has a single value).
+
+        Parameters:
+            grad (Optional[Tensor]): The gradient of the current tensor with respect to some 
+                                     scalar value. If `None`, and the tensor is a scalar, 
+                                     a gradient of 1.0 is used. For non-scalar outputs, 
+                                     `grad` must be provided.
+        """
         if not self.requires_grad:
             return
         
