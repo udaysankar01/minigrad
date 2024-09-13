@@ -18,7 +18,6 @@ class Tensor:
         _backward (callable or None): Function to backpropagate gradients through the tensor.
         _prev (set): The set of parent tensors used to create this tensor.
         _op (str): Operation that created this tensor, used for debugging.
-        shape (Tuple[int]): The shape of the tensor.
                     
     Example:
         >>> a = Tensor([1.0, 2.0, 3.0], requires_grad=True)
@@ -52,10 +51,9 @@ class Tensor:
         self._backward: Callable[[], None] = lambda: None
         self._prev: Set['Tensor'] = _children if _children is not None else set()
         self._op: str = _op
-        self.shape = self.data.shape
 
     def __repr__(self):
-        return f"Tensor (Data=\n{self.data}, requires_grad={self.requires_grad})\n"
+        return f"Tensor(\n{self.data})\n"
 
     def __neg__(self):
         data = -self.data
@@ -132,6 +130,36 @@ class Tensor:
             if other.requires_grad:
                 grad = self.data.T.dot(out.grad)
                 other.grad = other.grad + grad if other.grad is not None else grad
+        out._backward = _backward
+        return out
+
+    def sum(self, axis: Optional[int] = None):
+        """
+        Returns a new tensor with the sum of the elements along the specified axis.
+        If no axis is provided, sums over all elements.
+
+        Parameters:
+            axis (Optional[int]): The axis along which to sum. If None, sums over all elements.
+        
+        Returns:
+            out (Tensor): A new tensor containing the summed values.
+        
+        Example:
+            >>> a = Tensor([[1, 2], [3, 4]], requires_grad=True)
+            >>> b = a.sum(axis=0)
+            >>> print(b.data) # Output: Tensor([4, 6])
+        """
+        data = self.data.sum(axis=axis)
+        out = Tensor(data, self.requires_grad, _children={self}, _op='sum')
+
+        def _backward():
+            if self.requires_grad:
+                grad = out.grad
+                if axis is not None:
+                    grad = np.expand_dims(grad, axis)
+                grad = np.broadcast_to(grad, self.data.shape)
+                self.grad = self.grad + grad if self.grad is not None else grad
+        
         out._backward = _backward
         return out
 
