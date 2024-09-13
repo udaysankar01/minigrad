@@ -126,3 +126,4 @@ dmypy.json
 
 # testing
 test.py
+test/

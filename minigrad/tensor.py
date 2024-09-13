@@ -1,4 +1,5 @@
 import numpy as np
+import graphviz
 from typing import Optional, Union, Callable, Set
 
 class Tensor:
@@ -155,13 +156,18 @@ class Tensor:
         def _backward():
             if self.requires_grad:
                 grad = out.grad
+                print(grad)
                 if axis is not None:
                     grad = np.expand_dims(grad, axis)
+                    print(grad)
                 grad = np.broadcast_to(grad, self.data.shape)
+                print(grad)
                 self.grad = self.grad + grad if self.grad is not None else grad
         
         out._backward = _backward
         return out
+
+
 
     def backward(self, grad: Optional['Tensor'] = None):
         """
@@ -198,3 +204,41 @@ class Tensor:
         # backward pass
         for tensor in reversed(topo_order):
             tensor._backward()
+
+    # Visualization
+    def graph(self, filename: Optional[str] =  None) -> graphviz.Digraph:
+        """
+        Generates a graphviz Digraph of the computational graph.
+        """
+        dot = graphviz.Digraph(format='png', graph_attr={'rankdir': 'LR'})
+        visited = set()
+
+        def add_nodes(tensor: 'Tensor'):
+            if tensor not in visited:
+                visited.add(tensor)
+
+                uid = str(id(tensor))
+                label = self._tensor_label(tensor)
+                dot.node(name=uid, label=label, shape='record')
+
+                for child in tensor._prev:
+                    add_nodes(child)
+                    dot.edge(str(id(child)), uid)
+
+        add_nodes(self)
+
+        if filename:
+            dot.render(filename=filename, directory="test", view=False)
+        else:
+            dot.render(filename="temp", directory="test", view=False)
+        return dot
+    
+    def _tensor_label(self, tensor: 'Tensor') -> str:
+        """
+        Helper function to create a label for a tensor node.
+        """
+        label = ""
+        if tensor._op:
+            label += f"{tensor._op} | "
+        label += f"shape: {tensor.data.shape}"
+        return label
