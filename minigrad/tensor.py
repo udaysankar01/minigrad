@@ -47,6 +47,7 @@ class Tensor:
         self.data = data
         self.requires_grad = requires_grad
         self.grad: Optional[np.ndarray] = None
+        self._name: str = '' # for digraph
 
         # Internal variables used for autograd graph construction
         self._backward: Callable[[], None] = lambda: None
@@ -217,13 +218,20 @@ class Tensor:
             if tensor not in visited:
                 visited.add(tensor)
 
-                uid = str(id(tensor))
-                label = self._tensor_label(tensor)
-                dot.node(name=uid, label=label, shape='record')
+                tensor_id = str(id(tensor))
+                tensor_label = self._tensor_label(tensor)
+                dot.node(name=tensor_id, label=tensor_label, shape='record')
 
-                for child in tensor._prev:
-                    add_nodes(child)
-                    dot.edge(str(id(child)), uid)
+                if tensor._op:
+                    op_id = tensor_id + tensor._op
+                    op_label = self._op_label(tensor._op)
+                    dot.node(name=op_id, label=op_label, shape='circle')
+                    dot.edge(op_id, tensor_id)
+
+                    for child in tensor._prev:
+                        add_nodes(child)
+                        child_id = str(id(child))
+                        dot.edge(child_id, op_id)
 
         add_nodes(self)
 
@@ -238,7 +246,24 @@ class Tensor:
         Helper function to create a label for a tensor node.
         """
         label = ""
-        if tensor._op:
-            label += f"{tensor._op} | "
+        if tensor._name:
+            label += f"{tensor._name} | "
         label += f"shape: {tensor.data.shape}"
+        return label
+
+    def _op_label(self, op: str) -> str:
+        """
+        Helper function to create a label for a operation node.
+        """
+        label = ""
+        op_dict = {
+            "add" : "+",
+            "mul" : "*",
+            "neg" : "-",
+            "sum" : "Σ",
+            "div" : "/",
+            "matmul" : "@",
+        }
+        if op:
+            label += f"{op_dict[op]}"
         return label
