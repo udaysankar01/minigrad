@@ -29,6 +29,7 @@ class Tensor:
             requires_grad: bool = False,
             _children: Set['Tensor'] = None,
             _op: str = '',
+            _name: str = ''
     ):
         """
         Initialize the Tensor object.
@@ -41,13 +42,15 @@ class Tensor:
                                                Defaults to empty set.
             _op (str, optional): Operation that created this tensor, used for debugging.
                                  Defaults to empty string.
+            _name (str, optional): An identifier for the tensor to be used in the graph visualization.
+                                   Only for visualization purpose.
         """
         if not isinstance(data, np.ndarray):
             data = np.array(data, dtype=np.float32)
         self.data = data
         self.requires_grad = requires_grad
         self.grad: Optional[np.ndarray] = None
-        self._name: str = '' # for digraph
+        self._name: str = _name # for digraph
 
         # Internal variables used for autograd graph construction
         self._backward: Callable[[], None] = lambda: None
@@ -192,7 +195,28 @@ class Tensor:
         out._backward = _backward
         return out
 
+    def T(self):
+        """
+        Returns the transpose of the tensor.
 
+        Returns:
+            out (Tensor): A new tensor which is the transpose of the tensor.
+
+        Examples:
+            >>> A = Tensor([[1, 2, 3], [1, 2, 3], [1, 2, 3]], requires_grad=True)
+            >>> b = a.T()
+            >>> print(b.data)  # Output: [[1, 1, 1], [2, 2, 2], [3, 3, 3]]
+        """
+        data = self.data.T
+        out = Tensor(data, self.requires_grad, _children={self}, _op='transpose')
+
+        def _backward():
+            if self.requires_grad:
+                grad = out.grad.T
+                self.grad = self.grad + grad if self.grad is not None else grad
+        
+        out._backward = _backward
+        return out
 
     def backward(self, grad: Optional['Tensor'] = None):
         """
@@ -260,6 +284,12 @@ class Tensor:
     def graph(self, filename: Optional[str] =  None) -> graphviz.Digraph:
         """
         Generates a graphviz Digraph of the computational graph.
+
+        Parameters:
+            filename (optional, str): filename to store the generated graph
+        
+        Returns:
+            dot (graphviz.Digraph): Digraph object from graphviz
         """
         dot = graphviz.Digraph(format='png', graph_attr={'rankdir': 'LR'})
         visited = set()
@@ -288,7 +318,7 @@ class Tensor:
         if filename:
             dot.render(filename=filename, directory="test", view=False)
         else:
-            dot.render(filename="temp", directory="test", view=False)
+            pass
         return dot
     
     def _tensor_label(self, tensor: 'Tensor') -> str:
