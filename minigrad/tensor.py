@@ -1,6 +1,6 @@
 import numpy as np
 import graphviz
-from typing import Optional, Union, Callable, Set
+from typing import Optional, Union, Callable, Set, Tuple
 
 class Tensor:
     """
@@ -337,11 +337,30 @@ class Tensor:
         return out
     
     # Helper methods for convinience
-    # TODO: methods -> zeros, ones, randn, arange
     @property
     def shape(self):
         return self.data.shape
+
+    @staticmethod
+    def zeros(shape: Tuple[int, ...], requires_grad: bool = False):
+        data = np.zeros(shape, dtype=np.float32)
+        return Tensor(data, requires_grad)
     
+    @staticmethod
+    def ones(shape: Tuple[int, ...], requires_grad: bool = False):
+        data = np.ones(shape, dtype=np.float32)
+        return Tensor(data, requires_grad)
+    
+    @staticmethod
+    def randn(shape: Tuple[int, ...], requires_grad: bool = False):
+        data = np.random.randn(*shape).astype(np.float32)
+        return Tensor(data, requires_grad)
+    
+    @staticmethod
+    def arange(start: int, end: int, step: int = 1, requires_grad: bool = False):
+        data = np.arange(start, end, step, dtype=np.float32)
+        return Tensor(data, requires_grad)
+
     def _unbroadcast_grad(self, grad, shape):
         """
         Adjusts the gradient to account for broadcasting during forward pass.
@@ -360,7 +379,7 @@ class Tensor:
                 grad = grad.sum(axis=axis, keepdims=True)
         return grad
     
-    # Implementing __r*__ method for operations with scalars
+    ### Implementing __r*__ method for operations with scalars
     def __radd__(self, other):
         return self + other
 
@@ -376,13 +395,15 @@ class Tensor:
     
     # TODO: Overload comparison operators for tensors (element-wise)
 
-    # Visualization
+    ### Visualization
     def graph(self, filename: Optional[str] =  None, show_data: bool = False, show_grad: bool = False) -> graphviz.Digraph:
         """
         Generates a graphviz Digraph of the computational graph.
 
         Parameters:
             filename (optional, str): filename to store the generated graph
+            show_data (bool): Boolean to determine whether to show the data in the graph
+            show_grad (bool): Boolean to detemine whether to show the gradient in the graph
         
         Returns:
             dot (graphviz.Digraph): Digraph object from graphviz
