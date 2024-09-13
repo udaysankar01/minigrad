@@ -168,7 +168,29 @@ class Tensor:
         out._backward = _backward
         return out
 
-    
+    def relu(self):
+        """
+        Applies the ReLU (Rectified Linear Unit) function element-wise to the tensor.
+        The ReLU function replaces all negative values in the tensor with zero.
+
+        Returns:
+            out (Tensor): A new tensor where all negative values are replaced by zero.
+
+        Examples:
+            >>> a = Tensor([-2.0, 3.0, -1.0, 4.0], requires_grad=True)
+            >>> b = a.relu()
+            >>> print(b.data)  # Output: [0. 3. 0. 4.]
+        """
+        data = np.maximum(0, self.data)
+        out = Tensor(data, self.requires_grad, _children={self}, _op='relu')
+
+        def _backward():
+            if self.requires_grad:
+                grad = (self.data > 0).astype(self.data.dtype) * out.grad
+                self.grad = self.grad + grad if self.grad is not None else grad
+        
+        out._backward = _backward
+        return out
 
     def backward(self, grad: Optional['Tensor'] = None):
         """
@@ -263,7 +285,11 @@ class Tensor:
             "sum" : "Σ",
             "div" : "/",
             "matmul" : "@",
+            "relu" : "ReLU"
         }
         if op:
-            label += f"{op_dict[op]}"
+            if op in op_dict:
+                label += f"{op_dict[op]}"
+            else:
+                label += op
         return label
