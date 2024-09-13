@@ -192,6 +192,8 @@ class Tensor:
         out._backward = _backward
         return out
 
+
+
     def backward(self, grad: Optional['Tensor'] = None):
         """
         Computes the gradients by performing backprogation.
@@ -227,6 +229,32 @@ class Tensor:
         # backward pass
         for tensor in reversed(topo_order):
             tensor._backward()
+    
+    def zero_grad(self):
+        self.grad = None
+        for child in self._prev:
+            child.zero_grad()
+    
+    # Helper methods for convinience
+    @property
+    def shape(self):
+        return self.data.shape
+    
+    # Implementing __r*__ method for operations with scalars
+    def __radd__(self, other):
+        return self + other
+
+    def __rsub__(self, other):
+        return (-self) + other
+    
+    def __rmul__(self, other):
+        return self * other
+    
+    def __rtruediv__(self, other):
+        other = other if isinstance(other, Tensor) else Tensor(other)
+        return other / self
+    
+    # TODO: Overload comparison operators for tensors (element-wise)
 
     # Visualization
     def graph(self, filename: Optional[str] =  None) -> graphviz.Digraph:
