@@ -84,6 +84,39 @@ class Tensor:
     def __sub__(self, other):
         return self + (-other)
 
+    def __mul__(self, other):
+        other = other if isinstance(other, Tensor) else Tensor(other)
+        data = self.data * other.data
+        requires_grad = self.requires_grad or other.requires_grad
+        out = Tensor(data, requires_grad, _children={self,other}, _op='mul')
+
+        def _backward():
+            if self.requires_grad:
+                grad = other.grad * out.grad
+                self.grad = self.grad + grad if self.grad is not None else grad
+            if other.requires_grad:
+                grad = self.grad * out.grad
+                other.grad = other.grad + grad if other.grad is not None else grad
+        
+        out._backward = _backward
+        return out
+
+    def __truediv__(self, other):
+        other = other if isinstance(other, Tensor) else Tensor(other)
+        data = self.data / other.data
+        requires_grad = self.requires_grad or other.requires_grad
+        out = Tensor(data, requires_grad, _children={self,other}, _op='div')
+
+        def _backward():
+            if self.requires_grad:
+                grad = out.grad / other.data
+                self.grad = self.grad + grad if self.grad is not None else grad
+            if other.requires_grad:
+                grad = (-self.data / (other.grad ** 2)) * out.grad
+                other.grad = other.grad + grad if other.grad is not None else grad
+        out._backward = _backward
+        return out
+ 
     def backward(self, grad: Optional['Tensor'] = None):
         """
         Computes the gradients by performing backprogation.
