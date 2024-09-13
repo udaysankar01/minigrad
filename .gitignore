@@ -124,5 +124,6 @@ venv.bak/
 .dmypy.json
 dmypy.json
 
-# testing
-test/
+# test
+test/example
+test/example.png

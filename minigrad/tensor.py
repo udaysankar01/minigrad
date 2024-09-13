@@ -223,6 +223,34 @@ class Tensor:
         out._backward = _backward
         return out
 
+    def reshape(self, *shape):
+        """
+        Reshape the current tensor into a new shape withou changing its data.
+
+        Parameters:
+            *shape (int): Desired shape for the new tensor. Should be compatible
+                        with the original tensor shape.
+        
+        Returns:
+            out (Tensor): A new tensor with reshaped data. It shares same computational
+                        graph for automatic differentiation.
+
+        Examples:
+            >>> x = Tensor(np.array([1, 2, 3, 4]), requires_grad=True)
+            >>> y = x.reshape(2, 2)
+            >>> print(y) # [[1, 2], [3, 4]]
+        """
+        data = self.data.reshape(*shape)
+        out = Tensor(data, self.requires_grad, _children={self}, _op='reshape')
+
+        def _backward():
+            if self.requires_grad:
+                grad = out.grad.reshape(self.data.shape)
+                self.grad = self.grad + grad if self.grad is not None else grad
+        
+        out._backward = _backward
+        return out
+
     def backward(self, grad: Optional['Tensor'] = None):
         """
         Computes the gradients by performing backprogation.
@@ -263,8 +291,11 @@ class Tensor:
         self.grad = None
         for child in self._prev:
             child.zero_grad()
+
+    # TODO: implement slicing
     
     # Helper methods for convinience
+    # TODO: methods -> zeros, ones, randn, arange
     @property
     def shape(self):
         return self.data.shape
