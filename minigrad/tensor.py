@@ -200,6 +200,36 @@ class Tensor:
         out._backward = _backward
         return out
 
+    def mean(self, axis: Optional[int] = None):
+        """
+        Compute the mean of the tensor along a specified axis.
+
+        Parameters:
+            axis (Optional[int]): The axis along which to compute the mean.
+                        If None, computes the mean of all elements.
+        
+        Returns:
+            out (Tensor): A new tensor representing the computed mean.
+        
+        Examples:
+            >>> a = Tensor([[1, 2, 3], [3, 4, 5]], requires_grad=True)
+            >>> b = a.mean(axis=0)
+            >>> print(b.data)  # Output: [2. 3. 4.]
+        """
+        data = self.data.mean(axis=axis)
+        out = Tensor(data, self.requires_grad, _children={self}, _op='mean')
+
+        def _backward():
+            if self.requires_grad:
+                grad = out.grad / np.prod(self.data.shape if axis is None else self.data.shape[axis])
+                if axis is not None:
+                    grad = np.expand_dims(grad, axis)
+                grad = np.broadcast_to(grad, self.data.shape)
+                self.grad = self.grad + grad if self.grad is not None else grad
+        
+        out._backward = _backward
+        return out
+
     def T(self):
         """
         Returns the transpose of the tensor.

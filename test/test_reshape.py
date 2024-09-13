@@ -8,4 +8,4 @@ from minigrad import Tensor
 x = Tensor(np.array([1, 2, 3, 4]), requires_grad=True)
 y = x.reshape(2, 2)
 y.backward()
-print(y.grad)
+print(x.grad)
