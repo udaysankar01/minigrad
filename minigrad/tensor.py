@@ -322,7 +322,19 @@ class Tensor:
         for child in self._prev:
             child.zero_grad()
 
-    # TODO: implement slicing
+    # Slicing
+    def __getitem__(self, idx):
+        data = self.data[idx]
+        out = Tensor(data, self.requires_grad, _children={self}, _op='slice')
+
+        def _backward():
+            if self.requires_grad:
+                grad = np.zeros_like(self.data)
+                grad[idx] = out.grad
+                self.grad = self.grad + grad if self.grad is not None else grad
+        
+        out._backward = _backward
+        return out
     
     # Helper methods for convinience
     # TODO: methods -> zeros, ones, randn, arange
@@ -365,7 +377,7 @@ class Tensor:
     # TODO: Overload comparison operators for tensors (element-wise)
 
     # Visualization
-    def graph(self, filename: Optional[str] =  None) -> graphviz.Digraph:
+    def graph(self, filename: Optional[str] =  None, show_data: bool = False, show_grad: bool = False) -> graphviz.Digraph:
         """
         Generates a graphviz Digraph of the computational graph.
 
@@ -383,7 +395,7 @@ class Tensor:
                 visited.add(tensor)
 
                 tensor_id = str(id(tensor))
-                tensor_label = self._tensor_label(tensor, show_data=False, show_grad=False)
+                tensor_label = self._tensor_label(tensor, show_data, show_grad)
                 dot.node(name=tensor_id, label=tensor_label, shape='record')
 
                 if tensor._op:
@@ -402,7 +414,7 @@ class Tensor:
         if filename:
             dot.render(filename=filename, directory="test", view=False)
         else:
-            pass
+            dot.render(filename="example", directory="test", view=False)
         return dot
     
     def _tensor_label(self, tensor: 'Tensor', show_data=False, show_grad=False) -> str:
