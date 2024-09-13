@@ -93,11 +93,11 @@ class Tensor:
         out = Tensor(data, requires_grad, _children={self,other}, _op='mul')
 
         def _backward():
-            if self.requires_grad:
-                grad = other.grad * out.grad
+            if self.requires_grad:  
+                grad = other.data * out.grad
                 self.grad = self.grad + grad if self.grad is not None else grad
             if other.requires_grad:
-                grad = self.grad * out.grad
+                grad = self.data * out.grad
                 other.grad = other.grad + grad if other.grad is not None else grad
         
         out._backward = _backward
@@ -114,7 +114,7 @@ class Tensor:
                 grad = out.grad / other.data
                 self.grad = self.grad + grad if self.grad is not None else grad
             if other.requires_grad:
-                grad = (-self.data / (other.grad ** 2)) * out.grad
+                grad = (-self.data / (other.data ** 2)) * out.grad
                 other.grad = other.grad + grad if other.grad is not None else grad
         out._backward = _backward
         return out
