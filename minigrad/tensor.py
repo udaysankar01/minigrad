@@ -79,9 +79,17 @@ class Tensor:
 
         def _backward():
             if self.requires_grad:
-                self.grad = self.grad + out.grad if self.grad is not None else out.grad
+                grad_self = out.grad
+                if self.data.shape != out.grad.shape:
+                    axes = tuple(range(out.grad.ndim - self.data.ndim))
+                    grad_self = self._unbroadcast_grad(out.grad, self.data.shape)
+                self.grad = self.grad + grad_self if self.grad is not None else grad_self
             if other.requires_grad:
-                other.grad = other.grad + out.grad if other.grad is not None else out.grad
+                grad_other = out.grad
+                if other.data.shape != out.grad.shape:
+                    axes = tuple(range(out.grad.ndim - other.data.ndim))
+                    grad_other = self._unbroadcast_grad(out.grad, other.data.shape)
+                other.grad = other.grad + grad_other if other.grad is not None else grad_other
 
         out._backward = _backward
         return out
@@ -160,12 +168,9 @@ class Tensor:
         def _backward():
             if self.requires_grad:
                 grad = out.grad
-                print(grad)
                 if axis is not None:
                     grad = np.expand_dims(grad, axis)
-                    print(grad)
                 grad = np.broadcast_to(grad, self.data.shape)
-                print(grad)
                 self.grad = self.grad + grad if self.grad is not None else grad
         
         out._backward = _backward
@@ -264,6 +269,24 @@ class Tensor:
     def shape(self):
         return self.data.shape
     
+    def _unbroadcast_grad(self, grad, shape):
+        """
+        Adjusts the gradient to account for broadcasting during forward pass.
+
+        Parameters:
+            grad (np.ndarray): The gradient from the next layer (out.grad).
+            shape (Tuple[int, ...]): The shape of the original tensor before broadcasting.
+        
+        Returns:
+            grad (np.ndarray): The adjusted gradient that matches the original tensor's shape. 
+        """
+        while grad.ndim > len(shape):
+            grad = grad.sum(axis=0)
+        for axis, (grad_dim, shape_dim) in enumerate(zip(grad.shape, shape)):
+            if shape_dim == 1 and grad_dim > 1:
+                grad = grad.sum(axis=axis, keepdims=True)
+        return grad
+    
     # Implementing __r*__ method for operations with scalars
     def __radd__(self, other):
         return self + other
@@ -299,7 +322,7 @@ class Tensor:
                 visited.add(tensor)
 
                 tensor_id = str(id(tensor))
-                tensor_label = self._tensor_label(tensor)
+                tensor_label = self._tensor_label(tensor, show_data=False, show_grad=False)
                 dot.node(name=tensor_id, label=tensor_label, shape='record')
 
                 if tensor._op:
@@ -321,7 +344,7 @@ class Tensor:
             pass
         return dot
     
-    def _tensor_label(self, tensor: 'Tensor') -> str:
+    def _tensor_label(self, tensor: 'Tensor', show_data=False, show_grad=False) -> str:
         """
         Helper function to create a label for a tensor node.
         """
@@ -329,6 +352,10 @@ class Tensor:
         if tensor._name:
             label += f"{tensor._name} | "
         label += f"shape: {tensor.data.shape}"
+        if show_data:
+            label += f"| data: {tensor.data}"
+        if show_grad:
+            label += f"| grad: {tensor.grad}"
         return label
 
     def _op_label(self, op: str) -> str:

@@ -125,5 +125,4 @@ venv.bak/
 dmypy.json
 
 # testing
-test.py
 test/
