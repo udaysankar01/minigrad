@@ -26,7 +26,7 @@ class Tensor:
     def __init__(
             self,
             data: Union[float, list, np.ndarray],
-            requires_grad: bool = False,
+            requires_grad: bool = True,
             _children: Set['Tensor'] = None,
             _op: str = '',
             _name: str = ''
@@ -79,17 +79,15 @@ class Tensor:
 
         def _backward():
             if self.requires_grad:
-                grad_self = out.grad
+                grad = out.grad
                 if self.data.shape != out.grad.shape:
-                    axes = tuple(range(out.grad.ndim - self.data.ndim))
-                    grad_self = self._unbroadcast_grad(out.grad, self.data.shape)
-                self.grad = self.grad + grad_self if self.grad is not None else grad_self
+                    grad = self._unbroadcast_grad(grad, self.data.shape)
+                self.grad = self.grad + grad if self.grad is not None else grad
             if other.requires_grad:
-                grad_other = out.grad
+                grad = out.grad
                 if other.data.shape != out.grad.shape:
-                    axes = tuple(range(out.grad.ndim - other.data.ndim))
-                    grad_other = self._unbroadcast_grad(out.grad, other.data.shape)
-                other.grad = other.grad + grad_other if other.grad is not None else grad_other
+                    grad = self._unbroadcast_grad(grad, other.data.shape)
+                other.grad = other.grad + grad if other.grad is not None else grad
 
         out._backward = _backward
         return out
@@ -106,9 +104,13 @@ class Tensor:
         def _backward():
             if self.requires_grad:  
                 grad = other.data * out.grad
+                if self.data.shape != out.grad.shape:
+                    grad = self._unbroadcast_grad(grad, self.data.shape)
                 self.grad = self.grad + grad if self.grad is not None else grad
             if other.requires_grad:
                 grad = self.data * out.grad
+                if other.data.shape != out.grad.shape:
+                    grad = self._unbroadcast_grad(grad, other.data.shape)
                 other.grad = other.grad + grad if other.grad is not None else grad
         
         out._backward = _backward

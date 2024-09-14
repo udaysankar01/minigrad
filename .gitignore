@@ -125,5 +125,6 @@ venv.bak/
 dmypy.json
 
 # test
+run_tests.sh
 test/example
 test/example.png
