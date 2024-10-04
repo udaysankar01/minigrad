@@ -12,27 +12,68 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 import unittest
 import numpy as np
+import cupy as cp
 from minigrad import Tensor
 
 class TestTensor(unittest.TestCase):
 
-    def test_tensor_creation(self):
-        # Test creating tensor from a list
-        t = Tensor([1, 2, 3])
+    def test_tensor_creation_cpu(self):
+        # Test creating cpu tensor from a list
+        t = Tensor([1, 2, 3], device='cpu')
         self.assertTrue(isinstance(t.data, np.ndarray))
         np.testing.assert_array_equal(t.data, np.array([1, 2, 3]))
         self.assertTrue(t.requires_grad)
+        self.assertEqual(t.device, 'cpu')
 
-        # Test creating tensor from a numpy array
+        # Test creating cpu tensor from a numpy array
         data = np.array([4, 5, 6])
-        t = Tensor(data, requires_grad=False)
-        np.testing.assert_array_equal(t.data, data)
+        t = Tensor(data, requires_grad=False, device='cpu')
+        cp.testing.assert_array_equal(t.data, data)
         self.assertFalse(t.requires_grad)
+        self.assertEqual(t.device, 'cpu')
 
-        # Test creating tensor from a scalar
-        t = Tensor(10.0)
+        # Test creating cpu tensor from a cupy array
+        data = cp.array([4, 5, 6])
+        t = Tensor(data, requires_grad=False, device='cpu')
+        cp.testing.assert_array_equal(t.data, data)
+        self.assertFalse(t.requires_grad)
+        self.assertEqual(t.device, 'cpu')
+
+        # Test creating cpu tensor from a scalar
+        t = Tensor(10.0, device='cpu')
         self.assertEqual(t.data, 10.0)
         self.assertTrue(t.requires_grad)
+        self.assertEqual(t.device, 'cpu')
+
+    def test_tensor_creation_gpu(self):
+        # Test creating gpu tensor from a list
+        t = Tensor([1, 2, 3], device='gpu')
+        self.assertEqual(t.device, 'gpu')
+        self.assertTrue(isinstance(t.data, cp.ndarray))
+        cp.testing.assert_array_equal(t.data, cp.array([1, 2, 3]))
+        self.assertEqual(t.device, 'gpu')
+        self.assertTrue(t.requires_grad)
+
+        # Test creating gpu tensor from a numpy array
+        data = np.array([4, 5, 6])
+        t = Tensor(data, requires_grad=False, device='gpu')
+        cp.testing.assert_array_equal(t.data, data)
+        self.assertFalse(t.requires_grad)
+        self.assertEqual(t.device, 'gpu')
+
+        # Test creating gpu tensor from a cupy array
+        data = cp.array([4, 5, 6])
+        t = Tensor(data, requires_grad=False, device='gpu')
+        cp.testing.assert_array_equal(t.data, data)
+        self.assertFalse(t.requires_grad)
+        self.assertEqual(t.device, 'gpu')
+
+        # Test creating gpu tensor from a scalar
+        t = Tensor(10.0, device='gpu')
+        self.assertEqual(t.data, 10.0)
+        self.assertTrue(t.requires_grad)
+        self.assertEqual(t.device, 'gpu')
+
 
     def test_addition(self):
         # Tensor + Tensor

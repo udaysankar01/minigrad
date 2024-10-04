@@ -1,3 +1,4 @@
+import cupy as cp
 import numpy as np
 import graphviz
 from typing import Optional, Union, Callable, Set, Tuple
@@ -27,6 +28,7 @@ class Tensor:
             self,
             data: Union[float, list, np.ndarray],
             requires_grad: bool = True,
+            device: str = 'cpu',
             _children: Set['Tensor'] = None,
             _op: str = '',
             _name: str = ''
@@ -45,20 +47,56 @@ class Tensor:
             _name (str, optional): An identifier for the tensor to be used in the graph visualization.
                                    Only for visualization purpose.
         """
-        if not isinstance(data, np.ndarray):
-            data = np.array(data, dtype=np.float32)
-        self.data = data
+        self.device = device
         self.requires_grad = requires_grad
-        self.grad: Optional[np.ndarray] = None
+        self.grad: Optional[Union[np.ndarray, cp.ndarray]] = None
         self._name: str = _name # for digraph
+
+        # convert array to appropriate array type (numpy or cupy)
+        if not isinstance(data, (np.ndarray, cp.ndarray)):
+            data = np.array(data, dtype=np.float32)
+        
+        if device == "cpu":
+            data = self._to_cpu(data)
+        elif device == "gpu":
+            data = self._to_gpu(data)
+        self.data = data
 
         # Internal variables used for autograd graph construction
         self._backward: Callable[[], None] = lambda: None
         self._prev: Set['Tensor'] = _children if _children is not None else set()
         self._op: str = _op
 
+    def _to_cpu(self, data):
+        return cp.asnumpy(data) if isinstance(data, cp.ndarray) else data
+
+    def _to_gpu(self, data):
+        return cp.array(data) if isinstance(data, np.ndarray) else data
+
+    def to(self, device):
+        if self.device == device:
+            return self
+        
+        # transfer data to specified device
+        if device == "cpu":
+            self.data = self._to_cpu(self.data)
+            if self.grad is not None:
+                self.grad = self._to_cpu(self.grad)
+        elif device == "gpu":
+            self.data = self._to_gpu(self.data)
+            if self.grad is not None:
+                self.grad = self._to_gpu(self.grad)
+        else:
+            raise ValueError("Device must be 'cpu' or 'gpu'")
+        
+        self.device = device
+        return self
+
     def __repr__(self):
-        return f"Tensor(\n{self.data})\n"
+        if self.device == 'cpu':
+            return f"Tensor(\n{self.data})\n"
+        else:
+            return f"Tensor(\n{self.data}, device='{self.device}')"
 
     def __neg__(self):
         data = -self.data
@@ -298,7 +336,7 @@ class Tensor:
             return
         
         if grad is None:
-            grad = Tensor(np.ones_like(self.data))
+            grad = Tensor(np.ones_like(self.data), device=self.device)
 
         self.grad = grad.data
 
