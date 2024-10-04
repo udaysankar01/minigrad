@@ -74,6 +74,25 @@ class TestTensor(unittest.TestCase):
         self.assertTrue(t.requires_grad)
         self.assertEqual(t.device, 'gpu')
 
+    def test_tensor_transfer(self):
+        # create a tensor on CPU
+        data_cpu = np.array([1, 2, 3], dtype=np.float32)
+        t_cpu = Tensor(data_cpu, device='cpu')
+        self.assertEqual(t_cpu.device, 'cpu')
+        self.assertTrue(isinstance(t_cpu.data, np.ndarray))
+        cp.testing.assert_array_equal(t_cpu.data, data_cpu)
+
+        # transfer to GPU
+        t_gpu = t_cpu.to('gpu')
+        self.assertEqual(t_gpu.device, 'gpu')
+        self.assertTrue(isinstance(t_gpu.data, cp.ndarray))
+        cp.testing.assert_array_equal(t_gpu.data, data_cpu)
+
+        # transfer back to cpu
+        t_cpu_back = t_gpu.to('cpu')
+        self.assertEqual(t_cpu_back.device, 'cpu')
+        self.assertTrue(isinstance(t_cpu_back.data, np.ndarray))
+        cp.testing.assert_array_equal(t_cpu_back.data, data_cpu)
 
     def test_addition(self):
         # Tensor + Tensor
