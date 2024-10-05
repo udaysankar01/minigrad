@@ -127,7 +127,7 @@ class Tensor:
 
         out._backward = self._backward_fn(
             out,
-            self_grad_fn=lambda grad: self._apply_grad(self, -out.grad)
+            self_grad_fn=lambda grad: self._apply_grad(self, grad)
         )
         return out
 
