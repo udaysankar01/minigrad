@@ -128,3 +128,4 @@ dmypy.json
 run_tests.sh
 test/example
 test/example.png
+.benchmarks/

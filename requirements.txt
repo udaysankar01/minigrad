@@ -1,4 +1,6 @@
 cupy==13.3.0
-fastrlock==0.8.2
 graphviz==0.20.3
 numpy==2.0.2
+perfplot==0.10.2
+pytest==8.3.3
+pytest-benchmark==4.0.0

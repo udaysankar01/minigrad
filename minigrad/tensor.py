@@ -158,7 +158,6 @@ class Tensor:
             self_grad_fn=lambda grad: self._apply_grad(self, grad * other.data),
             other_grad_fn=lambda grad: self._apply_grad(other, grad * self.data)
         )
-
         return out
 
     def __truediv__(self, other: Union[float, int, list, np.ndarray, cp.ndarray, 'Tensor'])->'Tensor':
@@ -172,7 +171,6 @@ class Tensor:
             self_grad_fn=lambda grad: self._apply_grad(self, grad / other.data),
             other_grad_fn=lambda grad: self._apply_grad(other, (-self.data / (other.data ** 2)) * grad)
         )
-
         return out
  
     def __matmul__(self, other: Union[np.ndarray, cp.ndarray, 'Tensor'])->'Tensor':
@@ -186,7 +184,6 @@ class Tensor:
             self_grad_fn=lambda grad: self._apply_grad(self, grad.dot(other.data.T)),
             other_grad_fn=lambda grad: self._apply_grad(other, self.data.T.dot(grad))
         )
-
         return out
 
     def sum(self, axis: Optional[int] = None)->'Tensor':
@@ -253,7 +250,6 @@ class Tensor:
             out,
             self_grad_fn=lambda grad: self._apply_grad(self, grad_fn(grad, axis, self.data.shape))
         )
-
         return out
 
     def relu(self)->'Tensor':
@@ -302,7 +298,6 @@ class Tensor:
             out, 
             self_grad_fn=lambda grad: self._apply_grad(self, grad.T)
         )
-
         return out
 
     def reshape(self, *shape)->'Tensor':
