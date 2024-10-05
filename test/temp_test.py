@@ -5,11 +5,13 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 import numpy as np
 from minigrad import Tensor
 
-a = Tensor([1, 2, 3], requires_grad=True)
-b = a * 2
+a = Tensor([1, 2, 3], requires_grad=True, _name='a')
+two = Tensor(2, _name='2')
+b = a * two
+b._name = 'b'
+c = b.sum()
+c._name = 'c'
 
-b.backward()
+c.backward()
 
-
-
-b.graph(show_data=True, show_grad=True)
+c.graph(show_data=True, show_grad=True)

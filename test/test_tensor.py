@@ -70,15 +70,22 @@ class TestElementwiseTensorOps(BaseTestTensor):
 
     def _run_add_test(self, device):
         # TODO: Add broadcasting test
+        # TODO: Add a + a test
         # Tensor + Tensor
         a = Tensor([1, 2, 3], device=device)
         b = Tensor([4, 5, 6], device=device)
         c = a + b
         c.backward(Tensor([1, 2, 1], device=device))
-
         self.assert_tensor_properties(c, [5, 7, 9], device)
         self.assert_tensor_properties(a, [1, 2, 3], device, [1, 2, 1])
         self.assert_tensor_properties(b, [4, 5, 6], device, [1, 2, 1])
+
+        # a + a
+        a.zero_grad()
+        d = a + a
+        d.backward(Tensor([1, 1, 1], device=device))
+        self.assert_tensor_properties(d, [2, 4, 6], device)
+        self.assert_tensor_properties(a, [1, 2, 3], device, [2, 2, 2])
 
     def _run_add_scalar_test(self, device):
         # Tensor + Scalar
@@ -98,6 +105,7 @@ class TestElementwiseTensorOps(BaseTestTensor):
 
     def _run_sub_test(self, device):
         # TODO: Add broadcasting test
+        # TODO: Add a - a test
         # Tensor1 - Tensor2
         a = Tensor([5, 6, 7], device=device)
         b = Tensor([1, 2, 3], device=device)
@@ -136,6 +144,7 @@ class TestElementwiseTensorOps(BaseTestTensor):
 
     def _run_mul_test(self, device):
         # TODO: Add broadcasting test
+        # TODO: Add a * a test
         # Tensor1 * Tensor2
         a = Tensor([1, 2, 3], device=device)
         b = Tensor([4, 5, 6], device=device)
@@ -164,6 +173,7 @@ class TestElementwiseTensorOps(BaseTestTensor):
 
     def _run_div_test(self, device):
         # TODO: Add broadcasting test
+        # TODO: Add a / a test
         # Tensor1 / Tensor2
         a = Tensor([10, 15, 20], device=device)
         b = Tensor([2, 3, 4], device=device)

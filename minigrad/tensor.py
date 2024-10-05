@@ -15,7 +15,8 @@ class Tensor:
     Attributes:
         data (np.ndarray): The actual data stored in the tensor, converted to a NumPy array.
         requires_grad (bool): Indicates whether this tensor should calculate and accumulate
-                              gradients during the backward pass.
+                gradients during the backward pass.
+        device (str): The device where the tensor data is stored ('cpu' or 'gpu'). Defaults to 'cpu'.
         grad (np.ndarray or None): Stores the gradient of the tensor. Initially None.
         _backward (callable or None): Function to backpropagate gradients through the tensor.
         _prev (set): The set of parent tensors used to create this tensor.
@@ -39,16 +40,18 @@ class Tensor:
         Parameters:
             data (array-like): The initial values of the tensor. Can be a list, NumPy array, etc.
             requires_grad (bool, optional): If True, enables gradient tracking for this tensor.
-                                  Defaults to False.
+                    Defaults to False.
+            device (str): The device where the tensor data is stored  ('cpu' or 'gpu'). 
+                    Defaults to 'cpu'.
             _children (Set[Tensor], optional): Parent tensors that were used to compute this tensor.
-                                               Defaults to empty set.
+                    Defaults to empty set.
             _op (str, optional): Operation that created this tensor, used for debugging.
-                                 Defaults to empty string.
+                    Defaults to empty string.
             _name (str, optional): An identifier for the tensor to be used in the graph visualization.
-                                   Only for visualization purpose.
+                    Only for visualization purpose.
         """
-        self.device = device
-        self.requires_grad = requires_grad
+        self.device: str = device
+        self.requires_grad: bool = requires_grad
         self.grad: Optional[Union[np.ndarray, cp.ndarray]] = None
         self._name: str = _name # for digraph
 
@@ -108,82 +111,81 @@ class Tensor:
         
         out._backward = _backward
         return out
+    
+    def _apply_grad(self, tensor: 'Tensor', grad: Union[np.ndarray, cp.ndarray]):
+        if tensor.requires_grad:
+            if tensor.data.shape != grad.shape:
+                grad = self._unbroadcast_grad(grad, tensor.data.shape)
+            tensor.grad = tensor.grad + grad if tensor.grad is not None else grad
+
+    def _backward_fn(self, out: 'Tensor', self_grad_fn: Callable, other_grad_fn: Optional[Callable]=None):
+        """
+        Unary and Binary operation backward pass.
+        """
+        def _backward():
+            if self_grad_fn:
+                self_grad_fn(out.grad)
+
+            if other_grad_fn:
+                other_grad_fn(out.grad)
+        return _backward
 
     def __add__(self, other: Union[float, int, list, np.ndarray])->'Tensor':
-        other = other if isinstance(other, Tensor) else Tensor(other, device=self.device)
+        other: 'Tensor' = _ensure_tensor(other, self.device)
         data = self.data + other.data
         requires_grad = self.requires_grad or other.requires_grad
-        out = Tensor(data, requires_grad, self.device, _children={self,other}, _op='add')
+        out = Tensor(data, requires_grad, self.device, _children={self, other}, _op='add')
 
-        def _backward():
-            if self.requires_grad:
-                grad = out.grad
-                if self.data.shape != out.grad.shape:
-                    grad = self._unbroadcast_grad(grad, self.data.shape)
-                self.grad = self.grad + grad if self.grad is not None else grad
-            if other.requires_grad:
-                grad = out.grad
-                if other.data.shape != out.grad.shape:
-                    grad = self._unbroadcast_grad(grad, other.data.shape)
-                other.grad = other.grad + grad if other.grad is not None else grad
-
-        out._backward = _backward
+        out._backward = self._backward_fn(
+            out,
+            self_grad_fn=lambda grad: self._apply_grad(self, grad),
+            other_grad_fn=lambda grad: self._apply_grad(other, grad)
+        )
         return out
 
     def __sub__(self, other: Union[float, int, list, np.ndarray])->'Tensor':
         return self + (-other)
-
+    
     def __mul__(self, other: Union[float, int, list, np.ndarray])->'Tensor':
-        other = other if isinstance(other, Tensor) else Tensor(other, device=self.device)
+        other: 'Tensor' = _ensure_tensor(other, self.device)
         data = self.data * other.data
         requires_grad = self.requires_grad or other.requires_grad
         out = Tensor(data, requires_grad, self.device, _children={self,other}, _op='mul')
 
-        def _backward():
-            if self.requires_grad:  
-                grad = other.data * out.grad
-                if self.data.shape != out.grad.shape:
-                    grad = self._unbroadcast_grad(grad, self.data.shape)
-                self.grad = self.grad + grad if self.grad is not None else grad
-            if other.requires_grad:
-                grad = self.data * out.grad
-                if other.data.shape != out.grad.shape:
-                    grad = self._unbroadcast_grad(grad, other.data.shape)
-                other.grad = other.grad + grad if other.grad is not None else grad
-        
-        out._backward = _backward
+        out._backward = self._backward_fn(
+            out,
+            self_grad_fn=lambda grad: self._apply_grad(self, grad * other.data),
+            other_grad_fn=lambda grad: self._apply_grad(other, grad * self.data)
+        )
+
         return out
 
     def __truediv__(self, other: Union[float, int, list, np.ndarray])->'Tensor':
-        other = other if isinstance(other, Tensor) else Tensor(other, device=self.device)
+        other: 'Tensor' = _ensure_tensor(other, self.device)
         data = self.data / other.data
         requires_grad = self.requires_grad or other.requires_grad
         out = Tensor(data, requires_grad, self.device, _children={self,other}, _op='div')
 
-        def _backward():
-            if self.requires_grad:
-                grad = out.grad / other.data
-                self.grad = self.grad + grad if self.grad is not None else grad
-            if other.requires_grad:
-                grad = (-self.data / (other.data ** 2)) * out.grad
-                other.grad = other.grad + grad if other.grad is not None else grad
-        out._backward = _backward
+        out._backward = self._backward_fn(
+            out,
+            self_grad_fn=lambda grad: self._apply_grad(self, grad / other.data),
+            other_grad_fn=lambda grad: self._apply_grad(other, (-self.data / (other.data ** 2)) * grad)
+        )
+
         return out
  
-    def __matmul__(self, other)->'Tensor':
-        other = other if isinstance(other, Tensor) else Tensor(other, device=self.device)
+    def __matmul__(self, other: 'Tensor')->'Tensor':
+        other: 'Tensor' = _ensure_tensor(other, self.device)
         data = self.data @ other.data
         requires_grad = self.requires_grad or other.requires_grad
         out = Tensor(data, requires_grad, self.device, _children={self,other}, _op='matmul')
 
-        def _backward():
-            if self.requires_grad:
-                grad = out.grad.dot(other.data.T)
-                self.grad = self.grad + grad if self.grad is not None else grad
-            if other.requires_grad:
-                grad = self.data.T.dot(out.grad)
-                other.grad = other.grad + grad if other.grad is not None else grad
-        out._backward = _backward
+        out._backward = self._backward_fn(
+            out,
+            self_grad_fn=lambda grad: self._apply_grad(self, grad.dot(other.data.T)),
+            other_grad_fn=lambda grad: self._apply_grad(other, self.data.T.dot(grad))
+        )
+
         return out
 
     def sum(self, axis: Optional[int] = None)->'Tensor':
@@ -205,15 +207,17 @@ class Tensor:
         data = self.data.sum(axis=axis)
         out = Tensor(data, self.requires_grad, self.device, _children={self}, _op='sum')
 
-        def _backward():
-            if self.requires_grad:
-                grad = out.grad
-                if axis is not None:
-                    grad = np.expand_dims(grad, axis)
-                grad = np.broadcast_to(grad, self.data.shape)
-                self.grad = self.grad + grad if self.grad is not None else grad
+        def grad_fn(out_grad, axis, original_shape):
+            grad = out_grad
+            if axis is not None:
+                grad = np.expand_dims(grad, axis)
+            grad = np.broadcast_to(grad, original_shape)
+            return grad
         
-        out._backward = _backward
+        out._backward = self._backward_fn(
+            out,
+            self_grad_fn=lambda grad: self._apply_grad(self, grad_fn(grad, axis, self.data.shape))        
+        )
         return out
 
     def mean(self, axis: Optional[int] = None)->'Tensor':
@@ -235,15 +239,18 @@ class Tensor:
         data = self.data.mean(axis=axis)
         out = Tensor(data, self.requires_grad, self.device, _children={self}, _op='mean')
 
-        def _backward():
-            if self.requires_grad:
-                grad = out.grad / np.prod(self.data.shape if axis is None else self.data.shape[axis])
-                if axis is not None:
-                    grad = np.expand_dims(grad, axis)
-                grad = np.broadcast_to(grad, self.data.shape)
-                self.grad = self.grad + grad if self.grad is not None else grad
-        
-        out._backward = _backward
+        def grad_fn(out_grad, axis, original_shape):
+            grad = out_grad / np.prod(original_shape if axis is None else original_shape[axis])
+            if axis is not None:
+                grad = np.expand_dims(grad, axis)
+            grad = np.broadcast_to(grad, original_shape)
+            return grad
+
+        out._backward = self._backward_fn(
+            out,
+            self_grad_fn=lambda grad: self._apply_grad(self, grad_fn(grad, axis, self.data.shape))
+        )
+
         return out
 
     def relu(self)->'Tensor':
@@ -261,13 +268,15 @@ class Tensor:
         """
         data = np.maximum(0, self.data)
         out = Tensor(data, self.requires_grad, self.device, _children={self}, _op='relu')
-
-        def _backward():
-            if self.requires_grad:
-                grad = (self.data > 0).astype(self.data.dtype) * out.grad
-                self.grad = self.grad + grad if self.grad is not None else grad
         
-        out._backward = _backward
+        def grad_fn(out_grad, data, dtype):
+            grad = (data > 0).astype(dtype) * out_grad
+            return grad
+        
+        out._backward = self._backward_fn(
+            out,
+            self_grad_fn=lambda grad: self._apply_grad(self, grad_fn(grad, self.data, self.data.dtype))
+        )
         return out
 
     def T(self)->'Tensor':
@@ -284,13 +293,12 @@ class Tensor:
         """
         data = self.data.T
         out = Tensor(data, self.requires_grad, self.device, _children={self}, _op='transpose')
-
-        def _backward():
-            if self.requires_grad:
-                grad = out.grad.T
-                self.grad = self.grad + grad if self.grad is not None else grad
         
-        out._backward = _backward
+        out._backward = self._backward_fn(
+            out, 
+            self_grad_fn=lambda grad: self._apply_grad(self, grad.T)
+        )
+
         return out
 
     def reshape(self, *shape)->'Tensor':
@@ -312,14 +320,29 @@ class Tensor:
         """
         data = self.data.reshape(*shape)
         out = Tensor(data, self.requires_grad, self.device, _children={self}, _op='reshape')
-
-        def _backward():
-            if self.requires_grad:
-                grad = out.grad.reshape(self.data.shape)
-                self.grad = self.grad + grad if self.grad is not None else grad
         
-        out._backward = _backward
+        out._backward = self._backward_fn(
+            out,
+            self_grad_fn=lambda grad: self._apply_grad(self, grad.reshape(self.data.shape))
+        )
         return out
+
+    # Slicing
+    def __getitem__(self, idx)->'Tensor':
+        data = self.data[idx]
+        out = Tensor(data, self.requires_grad, self.device, _children={self}, _op='slice')
+        
+        def grad_fn(out_grad, data):
+            grad = np.zeros_like(data)
+            grad[idx] = out_grad
+            return grad
+
+        out._backward = self._backward_fn(
+            out,
+            self_grad_fn=lambda grad: self._apply_grad(self, grad_fn(grad, self.data))
+        )
+        return out
+    
 
     def backward(self, grad: Optional['Tensor'] = None):
         """
@@ -366,20 +389,6 @@ class Tensor:
         self.grad = None
         for child in self._prev:
             child.zero_grad()
-
-    # Slicing
-    def __getitem__(self, idx)->'Tensor':
-        data = self.data[idx]
-        out = Tensor(data, self.requires_grad, self.device, _children={self}, _op='slice')
-
-        def _backward():
-            if self.requires_grad:
-                grad = np.zeros_like(self.data)
-                grad[idx] = out.grad
-                self.grad = self.grad + grad if self.grad is not None else grad
-        
-        out._backward = _backward
-        return out
     
     # Helper methods for convinience
     @property
@@ -517,3 +526,6 @@ class Tensor:
             else:
                 label += op
         return label
+    
+def _ensure_tensor(input: Union[float, int, list, np.ndarray], device: str) -> 'Tensor':
+    return input if isinstance(input, Tensor) else Tensor(input, device=device)
