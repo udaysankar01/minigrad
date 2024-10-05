@@ -3,6 +3,8 @@ import numpy as np
 import graphviz
 from typing import Optional, Union, Callable, Set, Tuple
 
+TensorLike = Union[float, int, list, np.ndarray, cp.ndarray, 'Tensor']
+
 class Tensor:
     """
     A class representing a multi-dimensional array (tensor) with support for
@@ -13,7 +15,7 @@ class Tensor:
     True, the Tensor will accumulate gradients during backpropagation.
 
     Attributes:
-        data (np.ndarray): The actual data stored in the tensor, converted to a NumPy array.
+        data (np.ndarray or cp.ndarray): The actual data stored in the tensor, converted to a NumPy array.
         requires_grad (bool): Indicates whether this tensor should calculate and accumulate
                 gradients during the backward pass.
         device (str): The device where the tensor data is stored ('cpu' or 'gpu'). Defaults to 'cpu'.
@@ -27,7 +29,7 @@ class Tensor:
     """
     def __init__(
             self,
-            data: Union[float, list, np.ndarray],
+            data: TensorLike,
             requires_grad: bool = True,
             device: str = 'cpu',
             _children: Set['Tensor'] = None,
@@ -55,7 +57,7 @@ class Tensor:
         self.grad: Optional[Union[np.ndarray, cp.ndarray]] = None
         self._name: str = _name # for digraph
 
-        # convert array to appropriate array type (numpy or cupy)
+        # convert array to appropriate array type (numpy or cupy) -- redundant for gpu (fix later)
         if not isinstance(data, (np.ndarray, cp.ndarray)):
             data = np.array(data, dtype=np.float32)
         
@@ -70,13 +72,13 @@ class Tensor:
         self._prev: Set['Tensor'] = _children if _children is not None else set()
         self._op: str = _op
 
-    def _to_cpu(self, data)->np.ndarray:
+    def _to_cpu(self, data: Union[cp.ndarray, np.ndarray])->np.ndarray:
         return cp.asnumpy(data) if isinstance(data, cp.ndarray) else data
 
-    def _to_gpu(self, data)->cp.ndarray:
+    def _to_gpu(self, data: Union[np.ndarray, cp.ndarray])->cp.ndarray:
         return cp.array(data) if isinstance(data, np.ndarray) else data
 
-    def to(self, device)->'Tensor':
+    def to(self, device: str)->'Tensor':
         if self.device == device:
             return self
         
@@ -100,18 +102,7 @@ class Tensor:
             return f"Tensor(\n{self.data})\n"
         else:
             return f"Tensor(\n{self.data}, device='{self.device}')"
-
-    def __neg__(self)->'Tensor':
-        data = -self.data
-        out = Tensor(data, self.requires_grad, device=self.device, _children={self}, _op="neg")
-
-        def _backward():
-            if self.requires_grad:
-                self.grad = self.grad - out.grad if self.grad is not None else -out.grad
         
-        out._backward = _backward
-        return out
-    
     def _apply_grad(self, tensor: 'Tensor', grad: Union[np.ndarray, cp.ndarray]):
         if tensor.requires_grad:
             if tensor.data.shape != grad.shape:
@@ -130,7 +121,17 @@ class Tensor:
                 other_grad_fn(out.grad)
         return _backward
 
-    def __add__(self, other: Union[float, int, list, np.ndarray])->'Tensor':
+    def __neg__(self)->'Tensor':
+        data = -self.data
+        out = Tensor(data, self.requires_grad, device=self.device, _children={self}, _op="neg")
+
+        out._backward = self._backward_fn(
+            out,
+            self_grad_fn=lambda grad: self._apply_grad(self, -out.grad)
+        )
+        return out
+
+    def __add__(self, other: TensorLike)->'Tensor':
         other: 'Tensor' = _ensure_tensor(other, self.device)
         data = self.data + other.data
         requires_grad = self.requires_grad or other.requires_grad
@@ -143,10 +144,10 @@ class Tensor:
         )
         return out
 
-    def __sub__(self, other: Union[float, int, list, np.ndarray])->'Tensor':
+    def __sub__(self, other: Union[float, int, list, np.ndarray, cp.ndarray, 'Tensor'])->'Tensor':
         return self + (-other)
     
-    def __mul__(self, other: Union[float, int, list, np.ndarray])->'Tensor':
+    def __mul__(self, other: Union[float, int, list, np.ndarray, cp.ndarray, 'Tensor'])->'Tensor':
         other: 'Tensor' = _ensure_tensor(other, self.device)
         data = self.data * other.data
         requires_grad = self.requires_grad or other.requires_grad
@@ -160,7 +161,7 @@ class Tensor:
 
         return out
 
-    def __truediv__(self, other: Union[float, int, list, np.ndarray])->'Tensor':
+    def __truediv__(self, other: Union[float, int, list, np.ndarray, cp.ndarray, 'Tensor'])->'Tensor':
         other: 'Tensor' = _ensure_tensor(other, self.device)
         data = self.data / other.data
         requires_grad = self.requires_grad or other.requires_grad
@@ -174,7 +175,7 @@ class Tensor:
 
         return out
  
-    def __matmul__(self, other: 'Tensor')->'Tensor':
+    def __matmul__(self, other: Union[np.ndarray, cp.ndarray, 'Tensor'])->'Tensor':
         other: 'Tensor' = _ensure_tensor(other, self.device)
         data = self.data @ other.data
         requires_grad = self.requires_grad or other.requires_grad
@@ -204,14 +205,15 @@ class Tensor:
             >>> b = a.sum(axis=0)
             >>> print(b.data) # Output: Tensor([4, 6])
         """
-        data = self.data.sum(axis=axis)
+        xp = cp if self.device == "gpu" else np
+        data = xp.sum(self.data, axis=axis)
         out = Tensor(data, self.requires_grad, self.device, _children={self}, _op='sum')
 
         def grad_fn(out_grad, axis, original_shape):
             grad = out_grad
             if axis is not None:
-                grad = np.expand_dims(grad, axis)
-            grad = np.broadcast_to(grad, original_shape)
+                grad = xp.expand_dims(grad, axis)
+            grad = xp.broadcast_to(grad, original_shape)
             return grad
         
         out._backward = self._backward_fn(
@@ -236,14 +238,15 @@ class Tensor:
             >>> b = a.mean(axis=0)
             >>> print(b.data)  # Output: [2. 3. 4.]
         """
-        data = self.data.mean(axis=axis)
+        xp = cp if self.device == "gpu" else np
+        data = xp.mean(self.data, axis=axis)
         out = Tensor(data, self.requires_grad, self.device, _children={self}, _op='mean')
 
         def grad_fn(out_grad, axis, original_shape):
-            grad = out_grad / np.prod(original_shape if axis is None else original_shape[axis])
+            grad = out_grad / xp.prod(xp.array(original_shape if axis is None else original_shape[axis]))
             if axis is not None:
-                grad = np.expand_dims(grad, axis)
-            grad = np.broadcast_to(grad, original_shape)
+                grad = xp.expand_dims(grad, axis)
+            grad = xp.broadcast_to(grad, original_shape)
             return grad
 
         out._backward = self._backward_fn(
@@ -266,7 +269,8 @@ class Tensor:
             >>> b = a.relu()
             >>> print(b.data)  # Output: [0. 3. 0. 4.]
         """
-        data = np.maximum(0, self.data)
+        xp = cp if self.device == "gpu" else np
+        data = xp.maximum(0, self.data)
         out = Tensor(data, self.requires_grad, self.device, _children={self}, _op='relu')
         
         def grad_fn(out_grad, data, dtype):
@@ -329,11 +333,12 @@ class Tensor:
 
     # Slicing
     def __getitem__(self, idx)->'Tensor':
+        xp = cp if self.device == "gpu" else np
         data = self.data[idx]
         out = Tensor(data, self.requires_grad, self.device, _children={self}, _op='slice')
         
         def grad_fn(out_grad, data):
-            grad = np.zeros_like(data)
+            grad = xp.zeros_like(data)
             grad[idx] = out_grad
             return grad
 
@@ -397,22 +402,26 @@ class Tensor:
 
     @staticmethod
     def zeros(shape: Tuple[int, ...], requires_grad: bool = True, device: str = 'cpu')->'Tensor':
-        data = np.zeros(shape, dtype=np.float32)
+        xp = cp if device == "gpu" else np
+        data = xp.zeros(shape, dtype=xp.float32)
         return Tensor(data, requires_grad, device)
     
     @staticmethod
     def ones(shape: Tuple[int, ...], requires_grad: bool = True, device: str = 'cpu')->'Tensor':
-        data = np.ones(shape, dtype=np.float32)
+        xp = cp if device == "gpu" else np
+        data = xp.ones(shape, dtype=xp.float32)
         return Tensor(data, requires_grad, device)
     
     @staticmethod
     def randn(shape: Tuple[int, ...], requires_grad: bool = True, device: str = 'cpu')->'Tensor':
-        data = np.random.randn(*shape).astype(np.float32)
+        xp = cp if device == "gpu" else np
+        data = xp.random.randn(*shape).astype(xp.float32)
         return Tensor(data, requires_grad, device)
     
     @staticmethod
     def arange(start: int, end: int, step: int = 1, requires_grad: bool = True, device: str = 'cpu')->'Tensor':
-        data = np.arange(start, end, step, dtype=np.float32)
+        xp = cp if device == "gpu" else np
+        data = xp.arange(start, end, step, dtype=xp.float32)
         return Tensor(data, requires_grad, device)
 
     def _unbroadcast_grad(self, grad, shape):
@@ -434,16 +443,16 @@ class Tensor:
         return grad
     
     ### Implementing __r*__ method for operations with scalars
-    def __radd__(self, other: Union[float, int, list, np.ndarray])->'Tensor':
+    def __radd__(self, other: TensorLike)->'Tensor':
         return self + other
 
-    def __rsub__(self, other: Union[float, int, list, np.ndarray])->'Tensor':
+    def __rsub__(self, other: TensorLike)->'Tensor':
         return (-self) + other
     
-    def __rmul__(self, other: Union[float, int, list, np.ndarray])->'Tensor':
+    def __rmul__(self, other: TensorLike)->'Tensor':
         return self * other
     
-    def __rtruediv__(self, other: Union[float, int, list, np.ndarray])->'Tensor':
+    def __rtruediv__(self, other: TensorLike)->'Tensor':
         other = other if isinstance(other, Tensor) else Tensor(other, device=self.device)
         return other / self
     
@@ -527,5 +536,6 @@ class Tensor:
                 label += op
         return label
     
-def _ensure_tensor(input: Union[float, int, list, np.ndarray], device: str) -> 'Tensor':
-    return input if isinstance(input, Tensor) else Tensor(input, device=device)
+def _ensure_tensor(input: TensorLike, device: str) -> 'Tensor':
+    input: 'Tensor' = input if isinstance(input, Tensor) else Tensor(input, device=device)
+    return input

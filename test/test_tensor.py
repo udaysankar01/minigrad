@@ -70,7 +70,6 @@ class TestElementwiseTensorOps(BaseTestTensor):
 
     def _run_add_test(self, device):
         # TODO: Add broadcasting test
-        # TODO: Add a + a test
         # Tensor + Tensor
         a = Tensor([1, 2, 3], device=device)
         b = Tensor([4, 5, 6], device=device)
