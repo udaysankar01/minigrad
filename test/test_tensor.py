@@ -86,6 +86,15 @@ class TestElementwiseTensorOps(BaseTestTensor):
         self.assert_tensor_properties(d, [2, 4, 6], device)
         self.assert_tensor_properties(a, [1, 2, 3], device, [2, 2, 2])
 
+        # random test
+        t1 = Tensor([[-0.57504884]], device=device)
+        t2 = Tensor([[-0.5]], device=device)
+        t = t1 + t2
+        t.backward(Tensor([[-2.15009767]], device=device))
+        self.assert_tensor_properties(t, [[-1.07504884]], device)
+        self.assert_tensor_properties(t1, [[-0.57504884]], device, [[-2.15009767]])
+        self.assert_tensor_properties(t2, [[-0.5]], device, [[-2.15009767]])
+
     def _run_add_scalar_test(self, device):
         # Tensor + Scalar
         a = Tensor([1, 2, 3], device=device)
@@ -268,6 +277,13 @@ class TestUnaryTensorOps(BaseTestTensor):
         self.assert_tensor_properties(b, [-1, 2, -3], device)
         self.assert_tensor_properties(a, [1, -2, 3], device, [-1, -2, -1])
 
+    def _run_power_test(self, device):
+        a = Tensor([1, 2, 3], device=device)
+        b = a ** 3
+        b.backward(Tensor([3, 2, 1], device=device))
+        self.assert_tensor_properties(b, [1, 8, 27], device)
+        self.assert_tensor_properties(a, [1, 2, 3], device, [9, 24, 27])
+
     def _run_sum_test(self, device):
         # sum of all elements
         a_data = np.array([[[1, 2], [3, 4]], [[5, 6], [7, 8]]], dtype=np.float32)
@@ -334,6 +350,9 @@ class TestUnaryTensorOps(BaseTestTensor):
         b.backward(Tensor([1, 1, 1], device=device))
         self.assert_tensor_properties(b, [0, 0, 1], device)
         self.assert_tensor_properties(a, [-1, 0, 1], device, [0, 0, 1])
+
+    def test_power(self):
+        self.run_test_on_devices(self._run_power_test)
 
     def test_negation(self):
         self.run_test_on_devices(self._run_negation_test)

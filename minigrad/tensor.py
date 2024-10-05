@@ -114,7 +114,7 @@ class Tensor:
         Unary and Binary operation backward pass.
         """
         def _backward():
-            if self_grad_fn:
+            if self_grad_fn and self.requires_grad:
                 self_grad_fn(out.grad)
 
             if other_grad_fn:
@@ -123,11 +123,21 @@ class Tensor:
 
     def __neg__(self)->'Tensor':
         data = -self.data
-        out = Tensor(data, self.requires_grad, device=self.device, _children={self}, _op="neg")
+        out = Tensor(data, self.requires_grad, self.device, _children={self}, _op="neg")
 
         out._backward = self._backward_fn(
             out,
-            self_grad_fn=lambda grad: self._apply_grad(self, grad)
+            self_grad_fn=lambda grad: self._apply_grad(self, -grad)
+        )
+        return out
+    
+    def __pow__(self, power: int)-> 'Tensor':
+        data = self.data ** power
+        out = Tensor(data, self.requires_grad, self.device, _children={self}, _op="pow")
+
+        out._backward = self._backward_fn(
+            out,
+            self_grad_fn=lambda grad: self._apply_grad(self, grad * (power * (self.data ** (power - 1))))
         )
         return out
 
@@ -371,12 +381,17 @@ class Tensor:
         # Build topological order
         topo_order = []
         visited = set()
+        active_visits = set()
 
         def build_topo(tensor: Tensor):
+            if tensor in active_visits:
+                raise RuntimeError(f"Cycle detected in the computation graph at tensor: {tensor}")
             if tensor not in visited:
+                active_visits.add(tensor)
                 visited.add(tensor)
                 for child in tensor._prev:
                     build_topo(child)
+            active_visits.remove(tensor)
             topo_order.append(tensor)
         
         build_topo(self)

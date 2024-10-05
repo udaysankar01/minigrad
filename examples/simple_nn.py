@@ -42,12 +42,10 @@ if __name__ == '__main__':
         
         y_pred = model.forward(x)
         loss = criterion(y_pred, y_true)
-        loss.graph(show_data=True, show_grad=True)
-        
-        for param in model.params:
-            param.zero_grad()
 
+        optimizer.zero_grad()
         loss.backward()
+        loss.graph(show_data=True, show_grad=True)
         optimizer.step() 
 
         if epoch % 10 == 0:
