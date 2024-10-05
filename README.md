@@ -13,3 +13,9 @@ minigrad/
 ├── optim.py                  # Optimizers (SGD, Adam, etc.)
 └── loss.py                   # Loss functions (MSE, Cross-entropy, etc.)
 ```
+
+## Run Tests
+
+```bash
+python -m unittest discover -s test
+```
