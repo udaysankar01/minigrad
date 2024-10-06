@@ -14,12 +14,10 @@ My goal with minigrad is to explore and learn the internals of deep learning fra
 
 ## Installation
 
-Clone the repository and install minigrad:
+To install minigrad:
 
 ```bash
-git clone https://github.com/udaysankar01/minigrad.git
-cd minigrad
-pip install -e .
+pip install minigrad-python
 ```
 
 ## Usage
