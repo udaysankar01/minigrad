@@ -18,7 +18,7 @@ def get_version():
         return re.search(r'^__version__ = [\'"]([^\'"]*)[\'"]', f.read(), re.M).group(1)
 
 setup(
-    name="minigrad",
+    name="minigrad-python",
     version=get_version(),
     author="Uday Sankar",
     license="MIT",
