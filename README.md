@@ -22,6 +22,27 @@ cd minigrad
 pip install -e .
 ```
 
+## Usage
+
+### Basic Usage
+
+```python
+import minigrad as mg
+
+a = mg.Tensor([1, 2, 3], device='gpu')
+b = mg.Tensor([2, 3, 4], device='gpu')
+c = a + b
+d = c.sum()
+d.backward()
+print(a.grad)
+print(b.grad)
+```
+
+### Training a Neural Network
+
+- A very simple example of training a neural network can be found in `examples/simple_nn.py`
+- TODO: Add more examples.
+
 ## Run Tests
 
 To run the unit tests and benchmarks for the project
