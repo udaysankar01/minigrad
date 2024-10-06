@@ -29,12 +29,13 @@ if __name__ == '__main__':
     np.random.seed(42)
 
     model = Simple_NN(input_size=2, hidden_size=3, output_size=1)
+    model = model.to('gpu')
 
     optimizer = SGD(params=model.params, lr=0.01)
     criterion = MSELoss()
 
-    x = Tensor(np.random.rand(1, 2), requires_grad=False)
-    y_true = Tensor([[0.5]], requires_grad=False)
+    x = Tensor(np.random.rand(1, 2), requires_grad=False, device='gpu')
+    y_true = Tensor([[0.5]], requires_grad=False, device='gpu')
 
     # training loop
     epoch = 100

@@ -1,1 +1,1 @@
-PYTHONPATH=. python examples/simple_nn.py
+python examples/simple_nn.py

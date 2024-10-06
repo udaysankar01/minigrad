@@ -15,6 +15,11 @@ class Layer:
     
     def paramters(self):
         return self.params
+    
+    def to(self, device: str):
+        for param in self.params:
+            param.to(device)
+        return self
 
 class Linear(Layer):
     """
